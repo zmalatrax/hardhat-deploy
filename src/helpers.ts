@@ -684,8 +684,8 @@ export function addHelpers(
         proxyContract,
         proxyArgsTemplate,
         mergedABI,
-        updateMethod,
-        updateArgs,
+        postUpgradeMethod,
+        postUpgradeArgs,
       } = await _getProxyInfo(name, options);
       /* eslint-enable prefer-const */
 
@@ -700,16 +700,16 @@ export function addHelpers(
       );
 
       let data = '0x';
-      if (updateMethod) {
-        updateArgs = updateArgs || [];
-        if (!implementationContract[updateMethod]) {
+      if (postUpgradeMethod) {
+        postUpgradeArgs = postUpgradeArgs || [];
+        if (!implementationContract[postUpgradeMethod]) {
           throw new Error(
-            `contract need to implement function ${updateMethod}`
+            `contract need to implement function ${postUpgradeMethod}`
           );
         }
         const txData = await implementationContract.populateTransaction[
-          updateMethod
-        ](...updateArgs);
+          postUpgradeMethod
+        ](...postUpgradeArgs);
         data = txData.data || '0x';
       }
 
@@ -1050,8 +1050,8 @@ export function addHelpers(
     proxyContract: ExtendedArtifact;
     proxyArgsTemplate: any[];
     oldDeployment: Deployment | null;
-    updateMethod: string | undefined;
-    updateArgs: any[];
+    postUpgradeMethod: string | undefined;
+    postUpgradeArgs: any[];
     upgradeIndex: number | undefined;
     checkProxyAdmin: boolean;
     upgradeMethod: string | undefined;
@@ -1060,8 +1060,8 @@ export function addHelpers(
     const oldDeployment = await getDeploymentOrNUll(name);
     let contractName = options.contract;
     let implementationName = name + '_Implementation';
-    let updateMethod: string | undefined;
-    let updateArgs: any[] | undefined;
+    let postUpgradeMethod: string | undefined;
+    let postUpgradeArgs: any[] | undefined;
     let upgradeIndex;
     let proxyContract: ExtendedArtifact = eip173Proxy;
     let checkABIConflict = true;
@@ -1090,7 +1090,7 @@ export function addHelpers(
         }
       }
       if ('methodName' in options.proxy) {
-        updateMethod = options.proxy.methodName;
+        postUpgradeMethod = options.proxy.methodName;
         if ('execute' in options.proxy) {
           throw new Error(
             `cannot have both "methodName" and "execute" options for proxy`
@@ -1098,8 +1098,8 @@ export function addHelpers(
         }
       } else if ('execute' in options.proxy && options.proxy.execute) {
         if ('methodName' in options.proxy.execute) {
-          updateMethod = options.proxy.execute.methodName;
-          updateArgs = options.proxy.execute.args;
+          postUpgradeMethod = options.proxy.execute.methodName;
+          postUpgradeArgs = options.proxy.execute.args;
           if (
             'init' in options.proxy.execute ||
             'onUpgrade' in options.proxy.execute
@@ -1114,11 +1114,11 @@ export function addHelpers(
             options.proxy.execute.onUpgrade)
         ) {
           if (oldDeployment) {
-            updateMethod = options.proxy.execute.onUpgrade?.methodName;
-            updateArgs = options.proxy.execute.onUpgrade?.args;
+            postUpgradeMethod = options.proxy.execute.onUpgrade?.methodName;
+            postUpgradeArgs = options.proxy.execute.onUpgrade?.args;
           } else {
-            updateMethod = options.proxy.execute.init.methodName;
-            updateArgs = options.proxy.execute.init.args;
+            postUpgradeMethod = options.proxy.execute.init.methodName;
+            postUpgradeArgs = options.proxy.execute.init.args;
           }
         }
       }
@@ -1175,7 +1175,7 @@ export function addHelpers(
         upgradeArgsTemplate = options.proxy.upgradeFunction.upgradeArgs;
       }
     } else if (typeof options.proxy === 'string') {
-      updateMethod = options.proxy;
+      postUpgradeMethod = options.proxy;
     }
 
     const proxyName = name + '_Proxy';
@@ -1231,22 +1231,26 @@ Please specify the correct number of arguments as part of the deploy options: "a
       );
     }
 
-    if (updateMethod) {
-      const updateMethodFound: {
+    if (postUpgradeMethod) {
+      const postUpgradeMethodFound: {
         type: string;
         inputs: any[];
         name: string;
       } = artifact.abi.find(
         (fragment: {type: string; inputs: any[]; name: string}) =>
-          fragment.type === 'function' && fragment.name === updateMethod
+          fragment.type === 'function' && fragment.name === postUpgradeMethod
       );
-      if (!updateMethodFound) {
-        throw new Error(`contract need to implement function ${updateMethod}`);
+      if (!postUpgradeMethodFound) {
+        throw new Error(
+          `contract need to implement function ${postUpgradeMethod}`
+        );
       }
 
-      if (!updateArgs) {
-        if (implementationArgs.length === updateMethodFound.inputs.length) {
-          updateArgs = implementationArgs;
+      if (!postUpgradeArgs) {
+        if (
+          implementationArgs.length === postUpgradeMethodFound.inputs.length
+        ) {
+          postUpgradeArgs = implementationArgs;
         } else {
           throw new Error(
             `
@@ -1263,8 +1267,8 @@ Note that in this case, the contract deployment will not behave the same if depl
     }
 
     // this avoid typescript error, but should not be necessary at runtime
-    if (!updateArgs) {
-      updateArgs = implementationArgs;
+    if (!postUpgradeArgs) {
+      postUpgradeArgs = implementationArgs;
     }
 
     let proxyAdminName: string | undefined;
@@ -1309,14 +1313,14 @@ Note that in this case, the contract deployment will not behave the same if depl
     // Set upgrade function if not defined by the user, based on other options
     if (!upgradeMethod) {
       if (viaAdminContract) {
-        if (updateMethod) {
+        if (postUpgradeMethod) {
           upgradeMethod = 'upgradeAndCall';
           upgradeArgsTemplate = ['{proxy}', '{implementation}', '{data}'];
         } else {
           upgradeMethod = 'upgrade';
           upgradeArgsTemplate = ['{proxy}', '{implementation}'];
         }
-      } else if (updateMethod) {
+      } else if (postUpgradeMethod) {
         upgradeMethod = 'upgradeToAndCall';
         upgradeArgsTemplate = ['{implementation}', '{data}'];
       } else {
@@ -1342,8 +1346,8 @@ Note that in this case, the contract deployment will not behave the same if depl
       implementationName,
       implementationOptions,
       oldDeployment,
-      updateMethod,
-      updateArgs,
+      postUpgradeMethod,
+      postUpgradeArgs,
       upgradeIndex,
       checkProxyAdmin,
       upgradeMethod,
@@ -1358,8 +1362,8 @@ Note that in this case, the contract deployment will not behave the same if depl
     /* eslint-disable prefer-const */
     let {
       oldDeployment,
-      updateMethod,
-      updateArgs,
+      postUpgradeMethod,
+      postUpgradeArgs,
       upgradeIndex,
       viaAdminContract,
       proxyAdminDeployed,
@@ -1437,15 +1441,15 @@ Note that in this case, the contract deployment will not behave the same if depl
       );
 
       let data = '0x';
-      if (updateMethod) {
-        if (!implementationContract[updateMethod]) {
+      if (postUpgradeMethod) {
+        if (!implementationContract[postUpgradeMethod]) {
           throw new Error(
-            `contract need to implement function ${updateMethod}`
+            `contract need to implement function ${postUpgradeMethod}`
           );
         }
         const txData = await implementationContract.populateTransaction[
-          updateMethod
-        ](...updateArgs);
+          postUpgradeMethod
+        ](...postUpgradeArgs);
         data = txData.data || '0x';
       }
 
@@ -1541,10 +1545,10 @@ Note that in this case, the contract deployment will not behave the same if depl
         abi: mergedABI,
         implementation: implementation.address,
         args: proxy.args,
-        execute: updateMethod
+        execute: postUpgradeMethod
           ? {
-              methodName: updateMethod,
-              args: updateArgs,
+              methodName: postUpgradeMethod,
+              args: postUpgradeArgs,
             }
           : undefined,
       };
@@ -1570,10 +1574,10 @@ Note that in this case, the contract deployment will not behave the same if depl
           implementation: implementation.address,
           linkedData: options.linkedData,
           abi: mergedABI,
-          execute: updateMethod
+          execute: postUpgradeMethod
             ? {
-                methodName: updateMethod,
-                args: updateArgs,
+                methodName: postUpgradeMethod,
+                args: postUpgradeArgs,
               }
             : undefined,
         };
